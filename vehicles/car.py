@@ -1,8 +1,9 @@
 import pygame
+from vehicles.car_stats import CarStats
 
 
 class Car:
-    def __init__(self, x, y):
+    def __init__(self, x, y, stats=None):
         self.position = pygame.Vector2(x, y)
         self.velocity = pygame.Vector2(0, 0)
 
@@ -10,30 +11,20 @@ class Car:
         self.angular_velocity = 0
 
         self.original_image = pygame.image.load(
-            "assets/images/nigel_mobile.png"
+            "assets/images/corvette_c4_grand_sport.png"
         ).convert_alpha()
 
         self.size = (50, 30)
 
-        # -------------------
-        # Core Stats
-        # -------------------
-        self.acceleration = 420
-        self.brake_force = 2400
-        self.turn_speed = 320
-        self.max_speed = 1200
+        # =============================
+        # Stats System (Upgrade-Ready)
+        # =============================
+        self.base_stats = stats if stats else CarStats()
+        self.stats = self.base_stats.copy()
 
-        self.drag = 0.992
-        self.grip = 3.2
-        self.drift_grip = 0.5
-        self.angular_damping = 0.97
-
-        self.drift_assist_force = 1600
-        self.oversteer_strength = 6.0
-
-        # -------------------
-        # Gear System (Restored)
-        # -------------------
+        # =============================
+        # Gear System
+        # =============================
         self.gear_ratios = [0.0, 0.18, 0.35, 0.55, 0.75, 0.9, 1.0]
         self.current_gear = 1
         self.max_gears = len(self.gear_ratios) - 1
@@ -49,7 +40,7 @@ class Car:
         right = pygame.Vector2(0, 1).rotate(-self.angle)
 
         speed = self.velocity.length()
-        speed_ratio = min(speed / self.max_speed, 1)
+        speed_ratio = min(speed / self.stats.max_speed, 1)
 
         # -------------------
         # Acceleration
@@ -57,13 +48,17 @@ class Car:
         accel_factor = min(max(0, 1 - speed_ratio) * 1.5, 1)
 
         if keys[pygame.K_w]:
-            self.velocity += forward * self.acceleration * accel_factor * dt
+            self.velocity += (
+                forward * self.stats.acceleration * accel_factor * dt
+            )
 
         if keys[pygame.K_s]:
-            self.velocity -= forward * self.brake_force * dt
+            self.velocity -= (
+                forward * self.stats.brake_force * dt
+            )
 
         # -------------------
-        # Steering Input
+        # Steering
         # -------------------
         steer_input = 0
         if keys[pygame.K_a]:
@@ -71,11 +66,10 @@ class Car:
         if keys[pygame.K_d]:
             steer_input = -1
 
-        # Stronger steering at speed (arcade style)
         steering_factor = 0.6 + speed_ratio * 0.8
 
         self.angular_velocity += (
-            steer_input * self.turn_speed * steering_factor * dt
+            steer_input * self.stats.turn_speed * steering_factor * dt
         )
 
         # -------------------
@@ -95,42 +89,42 @@ class Car:
             slip_angle = 0
 
         # -------------------
-        # DRIFT MODE (Now Actually Works)
+        # Drift Mode
         # -------------------
         drifting = keys[pygame.K_SPACE] and speed > 180
 
         if drifting:
-            grip = self.drift_grip
+            grip = self.stats.drift_grip
 
-            # Big outward kick
-            self.velocity += right * steer_input * self.drift_assist_force * dt
+            # Arcade rear kick
+            self.velocity += (
+                right * steer_input *
+                self.stats.drift_assist_force * dt
+            )
 
-            # Heavy oversteer
-            self.angular_velocity += slip_angle * self.oversteer_strength * dt
-
-            # Slight forward push so drift doesn't stall
-            self.velocity += forward * 400 * dt
+            # Oversteer rotation
+            self.angular_velocity += (
+                slip_angle *
+                self.stats.oversteer_strength * dt
+            )
         else:
-            grip = self.grip
+            grip = self.stats.grip
 
-        # Apply grip
         lateral_velocity *= max(0, 1 - grip * dt)
-
         self.velocity = forward_velocity + lateral_velocity
-
 
         # -------------------
         # Drag + Speed Cap
         # -------------------
-        self.velocity *= self.drag
+        self.velocity *= 0.992
 
-        if self.velocity.length() > self.max_speed:
-            self.velocity.scale_to_length(self.max_speed)
+        if self.velocity.length() > self.stats.max_speed:
+            self.velocity.scale_to_length(self.stats.max_speed)
 
         # -------------------
         # Angular Motion
         # -------------------
-        self.angular_velocity *= self.angular_damping
+        self.angular_velocity *= self.stats.angular_damping
         self.angle += self.angular_velocity * dt
 
         # -------------------
@@ -139,10 +133,10 @@ class Car:
         self.position += self.velocity * dt
 
         # ======================================================
-        # AUTOMATIC GEAR SYSTEM
+        # Automatic Gear + RPM
         # ======================================================
         speed = self.velocity.length()
-        speed_ratio = min(speed / self.max_speed, 1)
+        speed_ratio = min(speed / self.stats.max_speed, 1)
 
         for i in range(1, self.max_gears + 1):
             if speed_ratio < self.gear_ratios[i]:
@@ -205,7 +199,7 @@ class Car:
         surface.blit(rotated_surface, rotated_rect)
 
     # ==========================================================
-    # ACCESSORS (Game Requires These)
+    # ACCESSORS
     # ==========================================================
     def get_engine_rpm(self):
         return self.engine_rpm

@@ -5,7 +5,7 @@ def main():
     pygame.init()
 
     pygame.mixer.init(44100, -16, 2, 512)
-    pygame.mixer.set_num_channels(32)
+    pygame.mixer.set_num_channels(32)    
 
     game = Game()
     game.run()
